@@ -53,31 +53,40 @@ def is_safe_query(query_string):
 
 
 @tool
-def read_pandas_dataframe(expression: str) -> DataFrame:
-    """Query a pandas DataFrame using a safe string expression and return filtered results.
+def read_pandas_dataframe(expression: str) -> str:
+    """Query a pandas DataFrame using a safe string expression and return filtered results as a JSON string.
 
-    This tool evaluates a query expression on a pandas DataFrame and returns a subset of rows
-    that match the given conditions. It includes a security check to prevent unsafe queries.
+    Reads data from 'anime-sample-dataset.xlsx', evaluates a query expression,
+    and returns a JSON string (records orientation) representing the subset of rows
+    that match the given conditions. Includes a security check.
 
     Args:
         expression (str):
-            A string expression defining the filter conditions. Must follow pandas `query()` syntax.
-            Example: "age > 30", "name.str.contains('Alice')".
+            A string expression defining the filter conditions (pandas `query()` syntax).
+            Example: "Rating > 8.5", "Name.str.contains('Naruto')".
 
     Returns:
-        pd.DataFrame:
-            A new DataFrame containing only the rows that satisfy the query conditions.
-            Returns an empty DataFrame if no matches are found.
+        str:
+            A JSON string representing the filtered DataFrame (list of records).
+            Returns '[]' if no matches are found or if the query results in an empty DataFrame.
 
     Raises:
         ValueError:
-            If the query expression is deemed unsafe (e.g., contains malicious code or invalid syntax).
+            If the query expression is deemed unsafe or causes an error during execution.
+            FileNotFoundError: If 'anime-sample-dataset.xlsx' is not found.
     """
 
     df = pd.read_excel("anime-sample-dataset.xlsx")
     if not is_safe_query(expression):
         raise ValueError("Invalid query string")
-    return df.query(expression, inplace=False)
+    result = df.query(expression, engine="python", inplace=False)
+
+    if result.empty:
+        return "[]"  # Explicitly return empty JSON array
+    elif isinstance(result, pd.Series):
+        return result.to_frame().to_json(orient="records")
+    else:
+        return result.to_json(orient="records")
 
 
 class ImageCard(BaseModel):
@@ -86,15 +95,6 @@ class ImageCard(BaseModel):
     title: str = Field(description="Title of the image card")
     description: str = Field(description="Description of the image")
     image_url: str = Field(description="URL of the image")
-
-
-class DataFrameDict(BaseModel):
-    """Dictionary representation of a DataFrame."""
-
-    # Define a specific structure expected for dataframe data
-    data: List[Dict[str, Any]] = Field(
-        ..., description="List of records, where each record is a row in the dataframe"
-    )
 
 
 class ResponseClass(BaseModel):
@@ -108,7 +108,6 @@ class ResponseClass(BaseModel):
     response_data: Union[
         str,  # For "text" type
         List[ImageCard],  # For "image" type (list of image cards)
-        DataFrameDict,  # For "dataframe" type - with explicit schema
     ] = Field(..., description="Response data matching the response_type")
 
 
@@ -124,7 +123,10 @@ def get_system_message():
         """
         You are an anime recommendation system. You have access to a tool that allows you to get information from an excel file about anime.
         It has information such as names and ratings. Your job is to return the best response based on the information supplied by the user.
-        Make sure to come up with correct and safe query expressions to query the dataframe.
+        Make sure to come up with correct and safe query expressions to query the dataframe. If you are returning a dataframe,
+        make sure to return it as a string that can be converted into a dictionary using json.loads. Use the tool to get information from the file, 
+        Whether it be the file columns or the actual data. When the user asks about a particular anime, return the image and description.
+        You can return a modified description to give better explaination.
         """
     )
 
