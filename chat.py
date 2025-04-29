@@ -1,6 +1,7 @@
 import streamlit as st
 from llm_utils import get_model_response
 import pandas as pd
+import json
 
 # --- Page Configuration (Optional) ---
 st.set_page_config(page_title="LLM Chat", layout="wide")
@@ -35,28 +36,28 @@ for message in st.session_state.messages:
         else:
             # For assistant, handle different response types
             content = message["content"]
-            if content["response_type"] == "text":
-                st.write(content["response_data"])
-            elif content["response_type"] == "dataframe":
+            if content.response_type == "text":
+                st.write(content.response_data)
+            elif content.response_type == "dataframe":
                 # Convert the DataFrameDict to a pandas DataFrame
-                if hasattr(content["response_data"], "data"):
+                if hasattr(content.response_data, "data"):
                     # It's a DataFrameDict object with .data attribute
-                    df = pd.DataFrame(content["response_data"].data)
+                    df = pd.DataFrame(json.loads(content.response_data.data))
                 elif (
-                    isinstance(content["response_data"], dict)
-                    and "data" in content["response_data"]
+                    isinstance(content.response_data, dict)
+                    and "data" in content.response_data
                 ):
                     # It's a dict with "data" key
-                    df = pd.DataFrame(content["response_data"]["data"])
+                    df = pd.DataFrame(content.response_data["data"])
                 else:
                     # Try to convert directly
-                    df = pd.DataFrame(content["response_data"])
+                    df = pd.DataFrame(json.loads(content.response_data))
                 st.dataframe(df, use_container_width=True)
-            elif content["response_type"] == "image":
-                for card in content["response_data"]:
-                    st.image(card["image_url"], caption=card["title"])
-                    st.subheader(card["title"])
-                    st.write(card["description"])
+            elif content.response_type == "image":
+                for card in content.response_data:
+                    st.image(card.image_url, caption=card.title)
+                    st.subheader(card.title)
+                    st.write(card.description)
             else:
                 # Fallback for unknown types
                 st.write(f"Unsupported content type: {content['response_type']}")
@@ -72,32 +73,21 @@ if prompt := st.chat_input(
 
     # 2. Get LLM response
     with st.spinner("LLM is thinking..."):
-        llm_response = get_llm_response(prompt)
+        llm_response = get_llm_response(prompt)["structured_response"]
 
     # 3. Add LLM response to chat history and display it
     st.session_state.messages.append({"role": "assistant", "content": llm_response})
 
     with st.chat_message("assistant"):
         # Check the type of content to display
-        if llm_response["response_type"] == "text":
-            st.write(llm_response["response_data"])
-        elif content["response_type"] == "dataframe":
+        if llm_response.response_type == "text":
+            st.write(llm_response.response_data)
+        elif llm_response.response_type == "dataframe":
             # Convert the DataFrameDict to a pandas DataFrame
-            if hasattr(content["response_data"], "data"):
-                # It's a DataFrameDict object with .data attribute
-                df = pd.DataFrame(content["response_data"].data)
-            elif (
-                isinstance(content["response_data"], dict)
-                and "data" in content["response_data"]
-            ):
-                # It's a dict with "data" key
-                df = pd.DataFrame(content["response_data"]["data"])
-            else:
-                # Try to convert directly
-                df = pd.DataFrame(content["response_data"])
+            df = pd.DataFrame(json.loads(llm_response.response_data))
             st.dataframe(df, use_container_width=True)
-        elif llm_response["response_type"] == "image":
-            for card in llm_response["response_data"]:
+        elif llm_response.response_type == "image":
+            for card in llm_response.response_data:
                 # Handle both dictionary and ImageCard object formats
                 if hasattr(card, "image_url"):
                     # It's an ImageCard object
