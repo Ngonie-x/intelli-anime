@@ -1,10 +1,38 @@
 import streamlit as st
-from llm_utils import get_model_response
+from langgraph.checkpoint.memory import MemorySaver
+from llm_utils import (
+    get_model_response,
+    ResponseClass,
+    create_llm_agent,
+    get_system_message,
+)
 import pandas as pd
 import json
 
 # --- Page Configuration (Optional) ---
 st.set_page_config(page_title="LLM Chat", layout="wide")
+
+
+config = {"configurable": {"thread_id": "abc123"}}
+
+
+@st.cache_resource
+def get_memory():
+    return MemorySaver()
+
+
+memory = get_memory()
+llm = create_llm_agent(memory)
+
+
+@st.cache_resource
+def invoke_system_message():
+    system_message = get_system_message()
+    llm.invoke({"messages": [system_message]}, config)
+
+
+invoke_system_message()
+
 
 st.title("Simple Chat with LLM 🤖")
 st.caption("This chat can display text, dataframes, and image cards.")
@@ -15,7 +43,7 @@ def get_llm_response(user_prompt):
     Calls the LLM with the user prompt and handles any exceptions.
     """
     try:
-        response = get_model_response(user_prompt)
+        response = get_model_response(llm, user_prompt, config)
         return response
     except Exception as e:
         # Return a basic error response in the expected format
@@ -73,7 +101,14 @@ if prompt := st.chat_input(
 
     # 2. Get LLM response
     with st.spinner("LLM is thinking..."):
-        llm_response = get_llm_response(prompt)["structured_response"]
+        response = get_llm_response(prompt)
+        try:
+            llm_response = response["structured_response"]
+        except KeyError as e:
+            llm_response = ResponseClass(
+                response_type="text",
+                response_data="Failed to return a structured output, query could not be executed successfully.",
+            )
 
     # 3. Add LLM response to chat history and display it
     st.session_state.messages.append({"role": "assistant", "content": llm_response})
