@@ -34,7 +34,7 @@ def invoke_system_message():
 invoke_system_message()
 
 
-st.title("Simple Chat with LLM 🤖")
+st.title("Anime Recommender 🤖")
 st.caption("This chat can display text, dataframes, and image cards.")
 
 
